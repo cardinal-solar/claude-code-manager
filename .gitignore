@@ -1,0 +1,24 @@
+# Worktrees
+.worktrees/
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+*.tsbuildinfo
+
+# Temp files
+*.log
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Testing
+coverage/
+
+# Environment
+.env
+.env.local
