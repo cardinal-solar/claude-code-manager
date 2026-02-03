@@ -1,0 +1,777 @@
+# Claude Code Manager - Guida per AI Agents
+
+## Cos'è
+
+Claude Code Manager è una libreria Node.js/TypeScript che permette di controllare programmaticamente Claude Code da applicazioni Node.js. Consente di:
+- Eseguire task singoli con risultati validati via Zod schema
+- Eseguire loop di task in stile Ralph (come ralph-does-it)
+- Gestire task file (prd.json/rrd.json) per sviluppo iterativo
+
+## Installazione
+
+```bash
+npm install claude-code-manager zod
+```
+
+Richiede Claude Code installato globalmente:
+```bash
+npm install -g @anthropic-ai/claude-code
+```
+
+## Concetti Chiave
+
+### 1. Single-Shot Execution
+Esegui un singolo task e ricevi un risultato validato secondo uno schema Zod.
+
+**Quando usare:**
+- Task isolati che producono un risultato strutturato
+- Generazione di codice, componenti, configurazioni
+- Analisi o trasformazioni che ritornano JSON validato
+
+**Come funziona:**
+1. Definisci schema Zod per l'output atteso
+2. Passa prompt e variabili al manager
+3. Claude Code esegue il task
+4. Il risultato viene validato contro lo schema
+5. Ricevi l'output tipizzato o un errore
+
+### 2. Loop Execution (Ralph-Compatible)
+Esegue task iterativamente fino al completamento, compatibile con il pattern Ralph.
+
+**Quando usare:**
+- Sviluppo di feature complesse con user stories multiple
+- Ricerca che richiede più iterazioni
+- Task che devono essere suddivisi in step sequenziali
+
+**Come funziona:**
+1. Crea un file prd.json (code mode) o rrd.json (research mode)
+2. Ogni iterazione lavora su un task con `passes: false`
+3. Claude Code completa il task, esegue test, fa commit
+4. Il task viene marcato `passes: true`
+5. Loop continua finché tutti i task sono completati
+
+### 3. Schema Validation con Zod
+Tutti i risultati devono essere validati con Zod per garantire type-safety.
+
+**Definizione schema:**
+```typescript
+import { z } from 'zod';
+
+const componentSchema = z.object({
+  code: z.string(),
+  tests: z.array(z.string()),
+  dependencies: z.array(z.string()),
+  documentation: z.string().optional()
+});
+```
+
+## Uso Base
+
+### Single-Shot: Generare un Componente
+
+```typescript
+import { ClaudeCodeManager } from 'claude-code-manager';
+import { z } from 'zod';
+
+const manager = new ClaudeCodeManager();
+
+// 1. Definisci schema output
+const schema = z.object({
+  componentCode: z.string(),
+  testCode: z.string(),
+  dependencies: z.array(z.string())
+});
+
+// 2. Esegui task
+const result = await manager.execute({
+  prompt: 'Crea un componente React Button con varianti primary/secondary',
+  variables: {
+    framework: 'React',
+    styling: 'Tailwind CSS'
+  },
+  schema,
+  timeout: 300000, // 5 minuti
+  onOutput: (chunk) => console.log(chunk)
+});
+
+// 3. Usa il risultato validato
+if (result.success) {
+  console.log('Componente:', result.data.componentCode);
+  console.log('Test:', result.data.testCode);
+  console.log('Dipendenze:', result.data.dependencies);
+} else {
+  console.error('Errore:', result.error);
+}
+```
+
+### Single-Shot: Analisi Codebase
+
+```typescript
+const analysisSchema = z.object({
+  fileCount: z.number(),
+  languages: z.array(z.string()),
+  structure: z.record(z.number()),
+  issues: z.array(z.object({
+    severity: z.enum(['low', 'medium', 'high']),
+    description: z.string(),
+    file: z.string()
+  }))
+});
+
+const result = await manager.execute({
+  prompt: 'Analizza la struttura del progetto e identifica possibili problemi',
+  schema: analysisSchema
+});
+```
+
+### Loop: Sviluppo Feature Completa
+
+```typescript
+// 1. Crea PRD (Product Requirements Document)
+import { PRD } from 'claude-code-manager';
+
+const prd = PRD.create({
+  project: 'User Authentication',
+  branchName: 'feature/auth',
+  description: 'Sistema di autenticazione completo',
+  userStories: [
+    {
+      id: 'US-001',
+      title: 'User registration endpoint',
+      description: 'API endpoint per registrazione utente con validazione email',
+      acceptanceCriteria: [
+        'Endpoint POST /api/auth/register',
+        'Validazione email format',
+        'Password hashing con bcrypt',
+        'Test unitari e integrazione'
+      ],
+      priority: 1,
+      estimatedComplexity: 3,
+      passes: false
+    },
+    {
+      id: 'US-002',
+      title: 'Login endpoint',
+      description: 'API endpoint per login con JWT',
+      acceptanceCriteria: [
+        'Endpoint POST /api/auth/login',
+        'Generazione JWT token',
+        'Verifica credenziali',
+        'Test coverage > 80%'
+      ],
+      priority: 2,
+      estimatedComplexity: 2,
+      passes: false
+    }
+  ]
+});
+
+await prd.save('./prd.json');
+
+// 2. Esegui loop
+const loopResult = await manager.executeLoop({
+  taskFile: './prd.json',
+  maxIterations: 10,
+  mode: 'code',
+  streamOutput: true,
+  onIteration: (iter) => {
+    console.log(`Iterazione ${iter.iteration}: ${iter.taskId}`);
+    if (iter.commits) {
+      console.log('Commit:', iter.commits);
+    }
+  },
+  ralphOptions: {
+    progressFile: './progress.txt',
+    gitAutoCommit: true,
+    branchAutoCreate: true
+  }
+});
+
+if (loopResult.completed) {
+  console.log('✅ Tutte le user stories completate!');
+  console.log(`Iterazioni totali: ${loopResult.iterations.length}`);
+}
+```
+
+## Pattern Comuni
+
+### Pattern 1: Generazione + Validazione
+
+```typescript
+// Schema per generazione API endpoint
+const apiSchema = z.object({
+  routes: z.array(z.object({
+    method: z.enum(['GET', 'POST', 'PUT', 'DELETE']),
+    path: z.string(),
+    handler: z.string(),
+    middleware: z.array(z.string())
+  })),
+  types: z.string(),
+  tests: z.string()
+});
+
+const result = await manager.execute({
+  prompt: 'Genera API REST per gestione prodotti con CRUD completo',
+  schema: apiSchema
+});
+```
+
+### Pattern 2: Task Sequenziali con State
+
+```typescript
+// Task 1: Genera schema database
+const schemaResult = await manager.execute({
+  prompt: 'Genera schema Prisma per blog con posts, users, comments',
+  schema: z.object({ schema: z.string() })
+});
+
+// Task 2: Usa lo schema per generare API
+const apiResult = await manager.execute({
+  prompt: `Genera API CRUD usando questo schema Prisma: ${schemaResult.data.schema}`,
+  variables: {
+    framework: 'Express',
+    orm: 'Prisma'
+  },
+  schema: z.object({
+    routes: z.string(),
+    controllers: z.string()
+  })
+});
+```
+
+### Pattern 3: Retry con Backoff
+
+```typescript
+const result = await manager.execute({
+  prompt: 'Task che potrebbe fallire temporaneamente',
+  schema: mySchema,
+  errorStrategy: {
+    mode: 'retry',
+    maxAttempts: 3,
+    backoffMs: 2000,
+    backoffMultiplier: 2,
+    shouldRetry: (error) => {
+      // Riprova solo per timeout, non per errori di validazione
+      return error.message.includes('timeout');
+    },
+    onError: (error, attempt) => {
+      console.log(`Tentativo ${attempt} fallito:`, error.message);
+    }
+  }
+});
+```
+
+### Pattern 4: Monitoring Real-Time
+
+```typescript
+const result = await manager.execute({
+  prompt: 'Task lungo',
+  schema: mySchema,
+  onOutput: (chunk) => {
+    // Invia output in real-time a UI, log, websocket, etc.
+    io.emit('progress', chunk);
+    logger.info(chunk);
+  }
+});
+```
+
+## Gestione Errori
+
+### Strategie Disponibili
+
+1. **fail-fast** (default): Fallisce immediatamente al primo errore
+2. **retry**: Riprova con backoff esponenziale
+3. **graceful**: Continua e restituisce valore di default
+4. **custom**: Handler personalizzato
+
+```typescript
+// Graceful degradation
+const result = await manager.execute({
+  prompt: 'Genera documentazione',
+  schema: docSchema,
+  errorStrategy: {
+    mode: 'graceful',
+    defaultValue: { docs: '# Documentazione non disponibile' }
+  }
+});
+
+// Custom handler
+const result = await manager.execute({
+  prompt: 'Task critico',
+  schema: mySchema,
+  errorStrategy: {
+    mode: 'custom',
+    handler: async (fn) => {
+      try {
+        return await fn();
+      } catch (error) {
+        // Log a sistema di monitoring
+        await sendToSentry(error);
+        // Notifica team
+        await sendSlackAlert(error);
+        throw error;
+      }
+    }
+  }
+});
+```
+
+## Integrazione con Applicazioni
+
+### Express API Server
+
+```typescript
+import express from 'express';
+import { ClaudeCodeManager } from 'claude-code-manager';
+import { z } from 'zod';
+
+const app = express();
+const manager = new ClaudeCodeManager();
+
+app.post('/api/generate-component', async (req, res) => {
+  const { description, framework } = req.body;
+
+  try {
+    const result = await manager.execute({
+      prompt: `Genera un componente: ${description}`,
+      variables: { framework },
+      schema: z.object({
+        code: z.string(),
+        tests: z.string()
+      }),
+      timeout: 300000
+    });
+
+    if (result.success) {
+      res.json(result.data);
+    } else {
+      res.status(500).json({ error: result.error?.message });
+    }
+  } catch (error) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.listen(3000);
+```
+
+### CLI Tool
+
+```typescript
+import { Command } from 'commander';
+import { ClaudeCodeManager } from 'claude-code-manager';
+
+const program = new Command();
+const manager = new ClaudeCodeManager();
+
+program
+  .command('generate <type>')
+  .description('Genera codice usando Claude Code')
+  .option('-f, --framework <framework>', 'Framework da usare')
+  .action(async (type, options) => {
+    const schema = getSchemaForType(type);
+
+    const result = await manager.execute({
+      prompt: `Genera ${type}`,
+      variables: options,
+      schema,
+      onOutput: (chunk) => process.stdout.write(chunk)
+    });
+
+    if (result.success) {
+      console.log('\n✅ Completato!');
+      // Salva files generati
+      await saveArtifacts(result.artifacts);
+    } else {
+      console.error('❌ Errore:', result.error);
+      process.exit(1);
+    }
+  });
+
+program.parse();
+```
+
+### Background Job Queue
+
+```typescript
+import Bull from 'bull';
+import { ClaudeCodeManager } from 'claude-code-manager';
+
+const queue = new Bull('code-generation');
+const manager = new ClaudeCodeManager();
+
+queue.process(async (job) => {
+  const { prompt, schema, userId } = job.data;
+
+  // Update progress
+  job.progress(0);
+
+  const result = await manager.execute({
+    prompt,
+    schema: z.object(schema),
+    onOutput: (chunk) => {
+      // Update job progress
+      job.log(chunk);
+    }
+  });
+
+  job.progress(100);
+
+  return result;
+});
+```
+
+## Best Practices
+
+### 1. Schema Design
+- Definisci schemi precisi e completi
+- Usa `.describe()` per aiutare Claude a capire il formato
+- Includi esempi nei commenti dello schema
+
+```typescript
+const schema = z.object({
+  // Nome del componente in PascalCase
+  name: z.string().describe('Nome componente in PascalCase (es: UserCard)'),
+  // Codice TypeScript del componente
+  code: z.string(),
+  // Array di dipendenze npm
+  dependencies: z.array(z.string()).describe('Pacchetti npm da installare'),
+  // Props del componente
+  props: z.array(z.object({
+    name: z.string(),
+    type: z.string(),
+    required: z.boolean()
+  }))
+});
+```
+
+### 2. Prompt Engineering
+- Sii specifico su formato output
+- Menziona lo schema nel prompt
+- Fornisci esempi quando possibile
+
+```typescript
+const result = await manager.execute({
+  prompt: `
+Crea un componente React Button con queste caratteristiche:
+- Supporto varianti: primary, secondary, danger
+- Supporto size: sm, md, lg
+- Props TypeScript strict
+- Styling con Tailwind CSS
+- Tests con Vitest e Testing Library
+
+IMPORTANTE: Ritorna JSON con struttura:
+{
+  "componentCode": "...",
+  "testCode": "...",
+  "dependencies": ["react", "..."]
+}
+  `.trim(),
+  schema
+});
+```
+
+### 3. Timeout Appropriati
+- Single tasks: 5-10 minuti
+- Loop iterations: 5 minuti per iterazione
+- Research tasks: 10-15 minuti
+
+```typescript
+// Task veloce
+timeout: 60000  // 1 minuto
+
+// Generazione componente
+timeout: 300000  // 5 minuti
+
+// Analisi complessa
+timeout: 600000  // 10 minuti
+```
+
+### 4. Gestione Artifacts
+Il risultato include `artifacts` array con file generati:
+
+```typescript
+const result = await manager.execute({
+  prompt: 'Genera modulo completo',
+  schema
+});
+
+if (result.success && result.artifacts) {
+  for (const artifactPath of result.artifacts) {
+    const content = await fs.readFile(artifactPath, 'utf-8');
+    // Processa o salva l'artifact
+    await saveToProject(artifactPath, content);
+  }
+}
+```
+
+### 5. Loop Mode Best Practices
+
+#### Suddividi task complessi
+```typescript
+// ❌ Task troppo grande
+{
+  id: 'US-001',
+  title: 'Build entire authentication system',
+  // Troppo per una iterazione!
+}
+
+// ✅ Task dimensionati correttamente
+{
+  id: 'US-001',
+  title: 'Create user model and migration'
+}
+{
+  id: 'US-002',
+  title: 'Create registration endpoint'
+}
+{
+  id: 'US-003',
+  title: 'Add JWT authentication'
+}
+```
+
+#### Usa progress tracking
+```typescript
+const result = await manager.executeLoop({
+  taskFile: './prd.json',
+  onIteration: async (iter) => {
+    // Salva stato in database
+    await db.tasks.update({
+      where: { id: iter.taskId },
+      data: {
+        status: iter.success ? 'completed' : 'failed',
+        duration: iter.duration,
+        commits: iter.commits
+      }
+    });
+
+    // Notifica progresso
+    await notifyProgress(iter);
+  }
+});
+```
+
+## Struttura File Progetto
+
+```
+your-project/
+├── src/
+│   └── (il tuo codice)
+├── prd.json              # Task definitions per code mode
+├── progress.txt          # Log dei progressi (auto-generato)
+├── .claude-tasks/        # Temp files (auto-generato)
+└── package.json
+```
+
+## Troubleshooting
+
+### Problema: Schema Validation Fallisce
+```typescript
+// Aggiungi logging dettagliato
+const result = await manager.execute({
+  prompt: '...',
+  schema: mySchema,
+  errorStrategy: {
+    mode: 'fail-fast',
+    onError: async (error, attempt) => {
+      if (error instanceof ValidationError) {
+        console.error('Validation error:', error.zodError.issues);
+        // Salva output raw per debug
+        await fs.writeFile('debug-output.json', error.details);
+      }
+    }
+  }
+});
+```
+
+### Problema: Timeout Frequenti
+```typescript
+// Aumenta timeout e aggiungi retry
+const result = await manager.execute({
+  prompt: '...',
+  schema: mySchema,
+  timeout: 600000, // 10 minuti
+  errorStrategy: {
+    mode: 'retry',
+    maxAttempts: 3,
+    backoffMs: 5000
+  }
+});
+```
+
+### Problema: Output Inconsistente
+```typescript
+// Rendi prompt più preciso con esempi
+const result = await manager.execute({
+  prompt: `
+Genera componente React.
+
+FORMATO OUTPUT (esatto):
+\`\`\`json
+{
+  "code": "import React from 'react'...",
+  "tests": "import { render }...",
+  "dependencies": ["react", "@types/react"]
+}
+\`\`\`
+
+Non aggiungere altro testo, solo il JSON.
+  `,
+  schema
+});
+```
+
+## Esempio Completo: Sistema CRUD
+
+```typescript
+import { ClaudeCodeManager, PRD } from 'claude-code-manager';
+import { z } from 'zod';
+
+async function buildCrudSystem() {
+  const manager = new ClaudeCodeManager();
+
+  // Fase 1: Genera schema database
+  console.log('📊 Generando schema database...');
+
+  const schemaResult = await manager.execute({
+    prompt: `
+Genera schema Prisma per sistema di gestione prodotti con:
+- Prodotti (name, description, price, stock)
+- Categorie (name, slug)
+- Relazione molti-a-molti tra prodotti e categorie
+    `,
+    schema: z.object({
+      prismaSchema: z.string(),
+      migrations: z.array(z.string())
+    })
+  });
+
+  if (!schemaResult.success) {
+    throw new Error('Schema generation failed');
+  }
+
+  // Fase 2: Crea PRD per API development
+  console.log('📝 Creando PRD per sviluppo API...');
+
+  const prd = PRD.create({
+    project: 'Product Management API',
+    branchName: 'feature/product-api',
+    description: 'RESTful API per gestione prodotti',
+    userStories: [
+      {
+        id: 'US-001',
+        title: 'Setup Prisma client',
+        description: 'Inizializzare Prisma client con schema generato',
+        acceptanceCriteria: [
+          'Prisma client configurato',
+          'Migrations applicabili',
+          'Database connesso'
+        ],
+        priority: 1,
+        estimatedComplexity: 2,
+        passes: false
+      },
+      {
+        id: 'US-002',
+        title: 'Product CRUD endpoints',
+        description: 'API endpoints per CRUD prodotti',
+        acceptanceCriteria: [
+          'GET /api/products - list con pagination',
+          'GET /api/products/:id - detail',
+          'POST /api/products - create',
+          'PUT /api/products/:id - update',
+          'DELETE /api/products/:id - delete',
+          'Validation con Zod',
+          'Tests coverage > 80%'
+        ],
+        priority: 2,
+        estimatedComplexity: 5,
+        passes: false
+      },
+      {
+        id: 'US-003',
+        title: 'Category endpoints',
+        description: 'API endpoints per categorie',
+        acceptanceCriteria: [
+          'CRUD completo categorie',
+          'GET /api/categories/:id/products',
+          'Tests coverage > 80%'
+        ],
+        priority: 3,
+        estimatedComplexity: 3,
+        passes: false
+      }
+    ]
+  });
+
+  await prd.save('./prd.json');
+
+  // Fase 3: Esegui loop development
+  console.log('🔄 Avvio sviluppo iterativo...');
+
+  const loopResult = await manager.executeLoop({
+    taskFile: './prd.json',
+    maxIterations: 10,
+    streamOutput: true,
+    onIteration: (iter) => {
+      console.log(`\n${'='.repeat(50)}`);
+      console.log(`Iterazione ${iter.iteration}`);
+      console.log(`Task: ${iter.taskId}`);
+      console.log(`Durata: ${iter.duration}ms`);
+
+      if (iter.commits?.length) {
+        console.log(`Commits: ${iter.commits.length}`);
+      }
+
+      if (!iter.success) {
+        console.error(`❌ Errore: ${iter.error?.message}`);
+      }
+    },
+    ralphOptions: {
+      progressFile: './progress.txt',
+      gitAutoCommit: true,
+      branchAutoCreate: true
+    }
+  });
+
+  // Fase 4: Report finale
+  if (loopResult.completed) {
+    console.log('\n🎉 Sistema CRUD completato!');
+    console.log(`\nStatistiche:`);
+    console.log(`- Iterazioni: ${loopResult.iterations.length}`);
+    console.log(`- Tasks completati: ${loopResult.finalState.tasksCompleted}`);
+    console.log(`- Durata totale: ${Math.round(loopResult.totalDuration / 1000)}s`);
+
+    const successfulIterations = loopResult.iterations.filter(i => i.success);
+    const totalCommits = successfulIterations.reduce(
+      (sum, i) => sum + (i.commits?.length || 0),
+      0
+    );
+    console.log(`- Commits totali: ${totalCommits}`);
+  } else {
+    console.log('\n⚠️  Sviluppo incompleto');
+    console.log(`Completati: ${loopResult.finalState.tasksCompleted}/${loopResult.finalState.tasksTotal}`);
+  }
+
+  return loopResult;
+}
+
+// Esegui
+buildCrudSystem().catch(console.error);
+```
+
+## Note Finali
+
+- La libreria è in fase di sviluppo (v0.1.0)
+- Loop execution (executeLoop) ha implementazione parziale
+- Skill installer funziona per setup automatico
+- Testato con Claude Code >= 0.5.0
+- Compatibile con Node.js >= 18.0.0
+
+## Risorse
+
+- Repository: [da definire]
+- Esempi: `./examples/`
+- Tests: `./tests/`
+- Ralph pattern: https://github.com/snarktank/ralph
