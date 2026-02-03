@@ -48,8 +48,18 @@ export class SingleShotExecutor {
       const taskDir = await this.prepareTask(options);
 
       // Build Claude Code command
-      const prompt = this.buildPrompt(taskDir);
-      const args = [prompt];
+      const prompt = this.buildPrompt(options.prompt, options.variables);
+      const jsonSchema = SchemaValidator.toJsonSchema(options.schema);
+
+      // Build args for non-interactive execution
+      const args = [
+        '--print',                              // Non-interactive mode
+        '--permission-mode', 'bypassPermissions', // Skip permission prompts
+        '--output-format', 'json',              // JSON output
+        '--json-schema', JSON.stringify(jsonSchema), // Schema validation
+        '--no-session-persistence',             // Don't save session
+        prompt                                   // The prompt
+      ];
 
       if (options.skill) {
         args.unshift('--skill', options.skill);
@@ -71,18 +81,38 @@ export class SingleShotExecutor {
         );
       }
 
-      // Read logs
-      const logs = result.output + (result.error ? '\nERRORS:\n' + result.error : '');
+      // Parse JSON output from Claude Code
+      let claudeResult: any;
+      try {
+        claudeResult = JSON.parse(result.output);
+      } catch (parseError) {
+        throw new ValidationError(
+          'Failed to parse Claude Code JSON output',
+          new Error(`Parse error: ${parseError}`) as any
+        );
+      }
 
-      // Read and validate result
-      const resultData = await this.fileManager.readResult(taskDir);
+      // Extract structured_output from Claude Code result
+      const resultData = claudeResult.structured_output;
+
+      if (!resultData) {
+        throw new ValidationError(
+          'No structured_output in Claude Code result',
+          new Error('Missing structured_output field') as any
+        );
+      }
+
+      // Validate against schema
       const validation = SchemaValidator.validate(resultData, options.schema);
 
       if (!validation.success) {
         throw new ValidationError('Result validation failed', validation.error);
       }
 
-      // List artifacts
+      // Logs from stderr
+      const logs = result.error || 'No logs';
+
+      // List artifacts (if any were created in task directory)
       const artifacts = await this.fileManager.listArtifacts(taskDir);
 
       return {
@@ -104,7 +134,18 @@ export class SingleShotExecutor {
     }
   }
 
-  private buildPrompt(taskDir: string): string {
-    return `Execute the task described in ${taskDir}/instructions.json following the schema in ${taskDir}/schema.json. Write the result to ${taskDir}/result.json and logs to ${taskDir}/logs.txt. Place any artifacts in ${taskDir}/artifacts/.`;
+  private buildPrompt(prompt: string, variables?: Record<string, any>): string {
+    // If variables provided, substitute them in the prompt
+    if (variables && Object.keys(variables).length > 0) {
+      let processedPrompt = prompt;
+      for (const [key, value] of Object.entries(variables)) {
+        processedPrompt = processedPrompt.replace(
+          new RegExp(`\\{${key}\\}`, 'g'),
+          String(value)
+        );
+      }
+      return processedPrompt;
+    }
+    return prompt;
   }
 }

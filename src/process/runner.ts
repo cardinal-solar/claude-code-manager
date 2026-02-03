@@ -26,7 +26,8 @@ export class ProcessRunner {
     return new Promise((resolve, reject) => {
       const childProcess = spawn(options.command, options.args || [], {
         cwd: options.cwd,
-        env: { ...process.env, ...options.env }
+        env: { ...process.env, ...options.env },
+        stdio: ['ignore', 'pipe', 'pipe'] // stdin ignore, stdout/stderr pipe
       });
 
       childProcess.stdout?.on('data', (chunk) => {
