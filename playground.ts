@@ -9,17 +9,43 @@ import { ClaudeCodeManager, PRD, ProgressTracker } from './src';
 import { z } from 'zod';
 import * as path from 'path';
 import * as os from 'os';
+import * as fs from 'fs/promises';
+
+// Helper per aspettare e vedere il processo
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 async function main() {
-  console.log('🎮 Claude Code Manager Playground\n');
+  const runId = Date.now();
+
+  console.log('🎮 Claude Code Manager Playground');
+  console.log('═'.repeat(50));
+  console.log(`⏰ Esecuzione #${runId}`);
+  console.log(`📅 ${new Date().toLocaleString('it-IT')}`);
+  console.log('═'.repeat(50));
+
+  // Crea directory univoca per questa esecuzione
+  const playgroundDir = path.join(os.tmpdir(), 'playground-test', `run-${runId}`);
+  console.log(`\n📂 Directory test: ${playgroundDir}`);
+
+  console.log('   ⏳ Creando directory...');
+  await fs.mkdir(playgroundDir, { recursive: true });
+  console.log('   ✅ Directory creata');
+
+  await sleep(500);
 
   const manager = new ClaudeCodeManager({
-    tempDir: path.join(os.tmpdir(), 'playground-test')
+    tempDir: playgroundDir
   });
+
+  console.log('✅ Manager inizializzato\n');
+  await sleep(500);
 
   // Test 1: Create PRD
   console.log('📝 Test 1: Creazione PRD');
   console.log('─'.repeat(50));
+
+  console.log('   ⏳ Creando PRD con 2 user stories...');
+  await sleep(300);
 
   const prd = PRD.create({
     project: 'Test Project',
@@ -47,26 +73,49 @@ async function main() {
     ]
   });
 
-  console.log('✅ PRD creato:');
-  console.log(`   Project: ${prd.getProject()}`);
-  console.log(`   Branch: ${prd.getBranchName()}`);
-  console.log(`   Stories: ${prd.getUserStories().length}`);
+  console.log('✅ PRD creato in memoria');
+  console.log(`   • Project: ${prd.getProject()}`);
+  console.log(`   • Branch: ${prd.getBranchName()}`);
+  console.log(`   • Stories: ${prd.getUserStories().length}`);
 
   const nextStory = prd.getNextStory();
-  console.log(`   Next story: ${nextStory?.id} - ${nextStory?.title}`);
+  console.log(`   • Next story: ${nextStory?.id} - ${nextStory?.title}`);
+
+  await sleep(300);
 
   // Salva PRD
-  const prdPath = path.join(os.tmpdir(), 'test-prd.json');
+  const prdPath = path.join(playgroundDir, 'prd.json');
+  console.log(`\n   ⏳ Salvando PRD su disco...`);
   await prd.save(prdPath);
-  console.log(`   Salvato in: ${prdPath}`);
+
+  const prdContent = await fs.readFile(prdPath, 'utf-8');
+  const prdSize = (await fs.stat(prdPath)).size;
+
+  console.log(`   ✅ PRD salvato: ${prdPath}`);
+  console.log(`   📊 Dimensione: ${prdSize} bytes`);
+  console.log(`   🔍 Contenuto (prime 150 chars):`);
+  console.log(`      ${prdContent.substring(0, 150)}...`);
+
+  await sleep(500);
 
   // Test 2: Progress Tracking
   console.log('\n📊 Test 2: Progress Tracking');
   console.log('─'.repeat(50));
 
-  const progressPath = path.join(os.tmpdir(), 'test-progress.txt');
+  const progressPath = path.join(playgroundDir, 'progress.txt');
+
+  console.log('   ⏳ Inizializzando progress file...');
+  await sleep(300);
+
   await ProgressTracker.initialize(progressPath);
-  console.log('✅ Progress file inizializzato');
+  const initialContent = await fs.readFile(progressPath, 'utf-8');
+  console.log('   ✅ Progress file creato e inizializzato');
+  console.log(`   📄 Header: "${initialContent.trim().substring(0, 50)}..."`);
+
+  await sleep(300);
+
+  console.log('\n   ⏳ Aggiungendo entry al progress...');
+  await sleep(300);
 
   await ProgressTracker.append(progressPath, {
     storyId: 'US-001',
@@ -77,11 +126,18 @@ async function main() {
       'Ricordarsi di aggiungere tests'
     ]
   });
-  console.log('✅ Entry aggiunta al progress');
+
+  const progressAfter = await fs.readFile(progressPath, 'utf-8');
+  const progressSize = (await fs.stat(progressPath)).size;
+
+  console.log('   ✅ Entry aggiunta');
+  console.log(`   📊 Dimensione file: ${progressSize} bytes`);
 
   const progress = await ProgressTracker.read(progressPath);
-  console.log(`   Entries: ${progress.entries.length}`);
-  console.log(`   Learnings: ${progress.learnings.length}`);
+  console.log(`   📈 Entries totali: ${progress.entries.length}`);
+  console.log(`   💡 Learnings accumulati: ${progress.learnings.length}`);
+
+  await sleep(500);
 
   // Test 3: Schema Validation
   console.log('\n🔍 Test 3: Schema Validation');
@@ -106,18 +162,25 @@ async function main() {
     code: 'export const Button = () => { ... }'
   };
 
-  // Importa direttamente per testare
+  console.log('   ⏳ Validando dati corretti...');
+  await sleep(300);
+
   const { SchemaValidator } = await import('./src/validation/schema');
 
   const validationResult = SchemaValidator.validate(validData, componentSchema);
-  console.log(`✅ Validazione: ${validationResult.success ? 'SUCCESSO' : 'FALLITA'}`);
+  console.log(`   ✅ Validazione: ${validationResult.success ? 'SUCCESSO ✓' : 'FALLITA ✗'}`);
 
   if (validationResult.success) {
-    console.log(`   Componente: ${validationResult.data.name}`);
-    console.log(`   Props: ${validationResult.data.props.length}`);
+    console.log(`   📦 Componente: ${validationResult.data.name}`);
+    console.log(`   🔧 Props: ${validationResult.data.props.length} proprietà`);
   }
 
+  await sleep(300);
+
   // Test con dati invalidi
+  console.log('\n   ⏳ Testando validazione con dati invalidi...');
+  await sleep(300);
+
   const invalidData = {
     name: 'Button',
     props: 'not-an-array', // Errore: dovrebbe essere array
@@ -125,85 +188,166 @@ async function main() {
   };
 
   const invalidResult = SchemaValidator.validate(invalidData, componentSchema);
-  console.log(`✅ Validazione dati invalidi: ${invalidResult.success ? 'SUCCESSO' : 'FALLITA (come previsto)'}`);
+  console.log(`   ✅ Validazione dati invalidi: ${invalidResult.success ? 'SUCCESSO' : 'FALLITA (come previsto) ✓'}`);
 
   if (!invalidResult.success) {
-    console.log(`   Errori trovati: ${invalidResult.error.issues.length}`);
+    console.log(`   🔴 Errori rilevati: ${invalidResult.error.issues.length}`);
+    invalidResult.error.issues.forEach((issue, i) => {
+      console.log(`      ${i + 1}. ${issue.path.join('.')}: ${issue.message}`);
+    });
   }
+
+  await sleep(500);
 
   // Test 4: File Manager
   console.log('\n📁 Test 4: File Manager');
   console.log('─'.repeat(50));
 
   const { FileManager } = await import('./src/files/file-manager');
-  const fileManager = new FileManager(path.join(os.tmpdir(), 'test-tasks'));
+  const fileManager = new FileManager(playgroundDir);
 
-  const taskDir = await fileManager.createTaskDir('test-123');
-  console.log(`✅ Task directory creata: ${taskDir}`);
+  console.log('   ⏳ Creando task directory...');
+  await sleep(300);
+
+  const taskDir = await fileManager.createTaskDir(`test-${runId}`);
+  console.log(`   ✅ Task directory: ${taskDir}`);
+
+  // Verifica che la directory esiste
+  const dirStats = await fs.stat(taskDir);
+  console.log(`   📂 Directory creata: ${dirStats.isDirectory() ? 'SI' : 'NO'}`);
+
+  await sleep(300);
+
+  console.log('\n   ⏳ Scrivendo task spec...');
+  await sleep(300);
 
   await fileManager.writeTaskSpec(taskDir, {
-    prompt: 'Test task',
-    variables: { framework: 'React' }
+    prompt: 'Test task per il playground',
+    variables: { framework: 'React', version: '18.2.0' }
   });
-  console.log('✅ Task spec scritta');
+
+  const specPath = path.join(taskDir, 'instructions.json');
+  const specContent = await fs.readFile(specPath, 'utf-8');
+  const specSize = (await fs.stat(specPath)).size;
+
+  console.log('   ✅ Task spec scritta');
+  console.log(`   📄 File: ${specPath}`);
+  console.log(`   📊 Dimensione: ${specSize} bytes`);
+
+  await sleep(300);
+
+  console.log('\n   ⏳ Scrivendo schema...');
+  await sleep(300);
 
   await fileManager.writeSchema(taskDir, {
     type: 'object',
     properties: {
-      result: { type: 'string' }
-    }
+      result: { type: 'string' },
+      success: { type: 'boolean' }
+    },
+    required: ['result', 'success']
   });
-  console.log('✅ Schema scritto');
+
+  const schemaPath = path.join(taskDir, 'schema.json');
+  const schemaContent = await fs.readFile(schemaPath, 'utf-8');
+  const schemaSize = (await fs.stat(schemaPath)).size;
+
+  console.log('   ✅ Schema scritto');
+  console.log(`   📄 File: ${schemaPath}`);
+  console.log(`   📊 Dimensione: ${schemaSize} bytes`);
+
+  await sleep(500);
 
   // Test 5: Manager Configuration
   console.log('\n⚙️  Test 5: Manager Configuration');
   console.log('─'.repeat(50));
 
+  console.log('   ⏳ Creando manager custom con hooks...');
+  await sleep(300);
+
+  let beforeHookCalled = false;
+  let afterHookCalled = false;
+
   const customManager = new ClaudeCodeManager({
     claudeCodePath: '/custom/path/claude',
-    tempDir: '/tmp/custom-tasks',
+    tempDir: path.join(playgroundDir, 'custom'),
     cleanupOnExit: false,
     hooks: {
       beforeExecute: async (options) => {
-        console.log(`   🔵 Hook beforeExecute: ${options.prompt.substring(0, 50)}...`);
+        beforeHookCalled = true;
+        console.log(`   🔵 Hook beforeExecute chiamato`);
+        console.log(`      Prompt: "${options.prompt.substring(0, 40)}..."`);
       },
       afterExecute: async (result) => {
-        console.log(`   🔵 Hook afterExecute: success=${result.success}`);
+        afterHookCalled = true;
+        console.log(`   🔵 Hook afterExecute chiamato`);
+        console.log(`      Success: ${result.success}`);
       }
     }
   });
 
-  console.log('✅ Manager configurato con:');
-  console.log(`   - Custom Claude path`);
-  console.log(`   - Custom temp dir`);
-  console.log(`   - Lifecycle hooks`);
+  console.log('   ✅ Manager configurato con:');
+  console.log(`      • Custom Claude path: /custom/path/claude`);
+  console.log(`      • Custom temp dir: ${path.join(playgroundDir, 'custom')}`);
+  console.log(`      • Lifecycle hooks: beforeExecute, afterExecute`);
+  console.log(`      • Cleanup on exit: false`);
 
-  // Riepilogo
+  await sleep(500);
+
+  // Riepilogo Files
+  console.log('\n📋 Riepilogo Files Creati');
+  console.log('─'.repeat(50));
+
+  const allFiles = [
+    prdPath,
+    progressPath,
+    specPath,
+    schemaPath
+  ];
+
+  for (const file of allFiles) {
+    const stats = await fs.stat(file);
+    const relativePath = path.relative(os.tmpdir(), file);
+    console.log(`   📄 ${path.basename(file)}`);
+    console.log(`      Path: ${relativePath}`);
+    console.log(`      Size: ${stats.size} bytes`);
+    console.log(`      Created: ${stats.birthtime.toLocaleTimeString('it-IT')}`);
+  }
+
+  // Riepilogo finale
   console.log('\n' + '═'.repeat(50));
-  console.log('🎉 Playground completato!');
+  console.log('🎉 Playground completato con successo!');
   console.log('═'.repeat(50));
   console.log('\n✅ Funzionalità testate:');
-  console.log('   1. ✓ Creazione e gestione PRD');
-  console.log('   2. ✓ Progress tracking');
-  console.log('   3. ✓ Schema validation (Zod)');
-  console.log('   4. ✓ File manager');
-  console.log('   5. ✓ Manager configuration');
+  console.log('   1. ✓ Creazione e gestione PRD (salvato su disco)');
+  console.log('   2. ✓ Progress tracking (file creato e popolato)');
+  console.log('   3. ✓ Schema validation con Zod (validi + invalidi)');
+  console.log('   4. ✓ File manager (directory e files creati)');
+  console.log('   5. ✓ Manager configuration (con hooks)');
+
+  console.log('\n📊 Statistiche:');
+  console.log(`   • Run ID: ${runId}`);
+  console.log(`   • Files creati: ${allFiles.length}`);
+  console.log(`   • Directory principale: ${playgroundDir}`);
 
   console.log('\n⚠️  Nota:');
   console.log('   - execute() richiede Claude Code installato');
   console.log('   - executeLoop() è in sviluppo (TODO)');
 
-  console.log('\n📚 Per testare execute(), vedi: examples/single-shot.ts');
-  console.log('📚 Per testare loop, vedi: examples/loop-basic.ts');
+  console.log('\n📚 Per testare execute(), vedi:');
+  console.log('   - examples/single-shot.ts (single execution)');
+  console.log('   - examples/loop-basic.ts (loop mode)');
 
-  console.log('\n🧪 Test files salvati in:');
-  console.log(`   - ${prdPath}`);
-  console.log(`   - ${progressPath}`);
-  console.log(`   - ${taskDir}`);
+  console.log('\n🧹 Per ripulire i test files:');
+  console.log(`   rm -rf ${path.join(os.tmpdir(), 'playground-test')}`);
+
+  console.log('\n💡 Tip: Esegui di nuovo per vedere una nuova esecuzione\n');
 }
 
 // Gestione errori
 main().catch((error) => {
   console.error('❌ Errore nel playground:', error);
+  console.error('\n📋 Stack trace:');
+  console.error(error.stack);
   process.exit(1);
 });
