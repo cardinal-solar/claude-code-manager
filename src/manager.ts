@@ -9,6 +9,7 @@ import {
   LoopResult
 } from './types';
 import { SingleShotExecutor } from './executors/single-shot';
+import { SkillInstaller } from './skills/installer';
 
 export class ClaudeCodeManager {
   private config: Required<Omit<ClaudeCodeManagerConfig, 'hooks' | 'globalTimeout'>> &
@@ -49,8 +50,14 @@ export class ClaudeCodeManager {
     throw new Error('Not implemented');
   }
 
-  static async installSkills(): Promise<void> {
-    // TODO: Implement skill installation
-    throw new Error('Not implemented');
+  static async installSkills(skillsDir?: string): Promise<void> {
+    const dir = skillsDir || path.join(os.homedir(), '.claude', 'skills');
+    const installer = new SkillInstaller(dir);
+
+    if (await installer.isInstalled()) {
+      return; // Already installed
+    }
+
+    await installer.install();
   }
 }

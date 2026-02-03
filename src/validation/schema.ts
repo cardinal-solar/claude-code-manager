@@ -1,15 +1,17 @@
 import { z } from 'zod';
-import { zodToJsonSchema } from 'zod-to-json-schema';
+
+// Avoid type inference issues by importing as any
+const zodToJsonSchema: any = require('zod-to-json-schema').zodToJsonSchema;
 
 export class SchemaValidator {
-  static toJsonSchema(schema: z.ZodType): any {
+  static toJsonSchema(schema: z.ZodType<any, any, any>): any {
     return zodToJsonSchema(schema);
   }
 
-  static validate<T extends z.ZodType>(
+  static validate<T extends z.ZodType<any, any, any>>(
     data: unknown,
     schema: T
-  ): { success: true; data: z.infer<T> } | { success: false; error: z.ZodError } {
+  ): { success: true; data: any } | { success: false; error: z.ZodError } {
     const result = schema.safeParse(data);
 
     if (result.success) {
