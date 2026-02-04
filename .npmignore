@@ -1,6 +1,52 @@
+# Source files (dist is included via "files" in package.json)
 src/
+
+# Tests
 tests/
 *.test.ts
+vitest.config.ts
+coverage/
+
+# Config files
 tsconfig.json
+.eslintrc*
+.prettierrc*
+.editorconfig
+
+# Git
+.git/
 .gitignore
+.gitattributes
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Docs and examples (users can find these on GitHub)
+docs/
+examples/
+*.md
+!README.md
+
+# Development files
+playground.ts
+llm.txt
 .worktrees/
+.claude-jobs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment
+.env
+.env.*
+
+# Misc
+*.tgz

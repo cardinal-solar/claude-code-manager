@@ -1,25 +1,59 @@
 {
   "name": "claude-code-manager",
   "version": "0.1.0",
-  "description": "Node.js library for managing Claude Code processes",
+  "description": "Node.js library for managing Claude Code processes with single-shot, loop execution, and background job polling",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc",
+    "build:watch": "tsc --watch",
+    "clean": "rm -rf dist",
+    "prebuild": "npm run clean",
     "test": "vitest",
+    "test:run": "vitest run",
     "test:coverage": "vitest --coverage",
     "lint": "eslint src --ext .ts",
-    "prepublishOnly": "npm run build"
+    "lint:fix": "eslint src --ext .ts --fix",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run lint && npm run test:run && npm run build",
+    "version": "npm run build",
+    "postversion": "git push && git push --tags"
   },
   "keywords": [
     "claude",
     "claude-code",
+    "anthropic",
     "ai",
     "automation",
-    "ralph"
+    "ralph",
+    "llm",
+    "code-generation",
+    "task-automation",
+    "job-scheduler",
+    "background-jobs",
+    "polling"
   ],
-  "author": "",
+  "author": "Federico Costa",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bluworl/claude-code-manager.git"
+  },
+  "homepage": "https://github.com/bluworl/claude-code-manager#readme",
+  "bugs": {
+    "url": "https://github.com/bluworl/claude-code-manager/issues"
+  },
   "dependencies": {
     "uuid": "^9.0.1",
     "zod": "^3.22.4",
@@ -37,6 +71,11 @@
   },
   "peerDependencies": {
     "@anthropic-ai/claude-code": ">=0.5.0"
+  },
+  "peerDependenciesMeta": {
+    "@anthropic-ai/claude-code": {
+      "optional": false
+    }
   },
   "engines": {
     "node": ">=18.0.0"
