@@ -6,8 +6,8 @@
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "require": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js"
     }
   },
   "files": [
@@ -20,6 +20,7 @@
     "build:watch": "tsc --watch",
     "clean": "rm -rf dist",
     "prebuild": "npm run clean",
+    "postbuild": "cp -r src/skills/templates dist/skills/templates",
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest --coverage",
