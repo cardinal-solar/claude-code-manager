@@ -8,7 +8,6 @@ import {
   JobStatus,
   JobManagerOptions,
   JobEvents,
-  JobProgress,
   StartJobOptions
 } from './types';
 import { JobStore } from './store';
@@ -199,7 +198,7 @@ export class JobManager {
     jobId: string,
     pollIntervalMs: number = 1000
   ): Promise<JobPollResult> {
-    while (true) {
+    for (;;) {
       const result = await this.poll(jobId);
       if (result.finished) {
         return result;

@@ -1,5 +1,5 @@
 {
-  "name": "claude-code-manager",
+  "name": "claude-task-runner",
   "version": "0.1.0",
   "description": "Node.js library for managing Claude Code processes with single-shot, loop execution, and background job polling",
   "main": "dist/index.js",

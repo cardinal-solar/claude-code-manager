@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-// Avoid type inference issues by importing as any
+// eslint-disable-next-line @typescript-eslint/no-var-requires
 const zodToJsonSchema: any = require('zod-to-json-schema').zodToJsonSchema;
 
 export class SchemaValidator {

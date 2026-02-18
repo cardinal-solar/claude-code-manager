@@ -318,6 +318,7 @@ export class JobStore {
 
   private serializeOptions(options: any): any {
     // Remove non-serializable options like callbacks
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { onIteration, cancelToken, onOutput, ...serializable } = options;
 
     // Convert schema to a placeholder if it's a Zod schema
