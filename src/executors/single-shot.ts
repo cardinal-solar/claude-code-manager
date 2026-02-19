@@ -52,9 +52,10 @@ export class SingleShotExecutor {
       const jsonSchema = SchemaValidator.toJsonSchema(options.schema);
 
       // Build args for non-interactive execution
+      const permissionMode = options.permissionMode || 'bypassPermissions';
       const args = [
         '--print',                              // Non-interactive mode
-        '--permission-mode', 'bypassPermissions', // Skip permission prompts
+        '--permission-mode', permissionMode,    // Permission mode (configurable)
         '--output-format', 'json',              // JSON output
         '--json-schema', JSON.stringify(jsonSchema), // Schema validation
         '--no-session-persistence',             // Don't save session
@@ -65,12 +66,17 @@ export class SingleShotExecutor {
         args.unshift('--skill', options.skill);
       }
 
+      if (options.model) {
+        args.unshift('--model', options.model);
+      }
+
       // Execute Claude Code
       const result = await this.processRunner.run({
         command: this.config.claudeCodePath,
         args,
         cwd: taskDir,
-        timeout: options.timeout
+        timeout: options.timeout,
+        env: options.env,
       });
 
       if (result.exitCode !== 0) {

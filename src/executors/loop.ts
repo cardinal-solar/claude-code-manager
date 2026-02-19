@@ -86,7 +86,10 @@ export class LoopExecutor {
         const result = await this.singleShotExecutor.execute({
           prompt,
           schema: storySchema,
-          timeout: options.processOptions?.timeout
+          timeout: options.processOptions?.timeout,
+          env: options.env,
+          model: options.model,
+          permissionMode: options.permissionMode,
         });
 
         // Record iteration

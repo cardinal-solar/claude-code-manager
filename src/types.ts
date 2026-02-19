@@ -47,6 +47,12 @@ export interface ExecuteOptionsBase {
   errorStrategy?: ErrorStrategy;
   onOutput?: (chunk: string) => void;
   permissions?: string[];
+  /** Extra environment variables passed to the Claude Code child process (e.g. ANTHROPIC_API_KEY). */
+  env?: Record<string, string>;
+  /** Model to use (e.g. "claude-sonnet-4-5-20250514"). Passed as --model to Claude Code. */
+  model?: string;
+  /** Permission mode override (default: "bypassPermissions"). Passed as --permission-mode. */
+  permissionMode?: string;
 }
 
 export interface ExecuteOptions<T extends z.ZodType> extends ExecuteOptionsBase {
@@ -88,6 +94,12 @@ export interface ExecuteLoopOptions {
   ralphOptions?: RalphOptions;
   cancelToken?: CancellationToken;
   processOptions?: ProcessOptions;
+  /** Extra environment variables passed to each iteration's Claude Code process. */
+  env?: Record<string, string>;
+  /** Model to use for each iteration. */
+  model?: string;
+  /** Permission mode for each iteration (default: "bypassPermissions"). */
+  permissionMode?: string;
 }
 
 export interface LoopResult {
